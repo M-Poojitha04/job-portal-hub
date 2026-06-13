@@ -44,27 +44,27 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Error: Email is already in use!");
         }
 
-        // 1. Create and save the secure credentials
+        // 1. Build the base user entity
         User user = User.builder()
                 .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword())) // BCrypt hash
+                .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
                 .isActive(true)
                 .build();
 
+        // 2. Save user credentials
         User savedUser = userRepository.save(user);
 
-        // 2. Automatically link a clean base Profile record
-        Profile profile = Profile.builder()
-                .id(savedUser.getId())
-                .user(savedUser)
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
-                .build();
+        // 3. Build the profile linked cleanly via object relationship
+        Profile profile = new Profile();
+        profile.setUser(savedUser); // Simply attach the fully saved user object reference!
+        profile.setFirstName(request.getFirstName());
+        profile.setLastName(request.getLastName());
 
+        // 4. Save the child profile record
         profileRepository.save(profile);
 
-        // 3. Auto-login on successful registration by issuing token immediately
+        // 5. Generate token and return response
         String token = jwtUtil.generateToken(savedUser.getEmail(), savedUser.getRole().name());
         return ResponseEntity.ok(new AuthResponse(token, savedUser.getEmail(), savedUser.getRole().name()));
     }

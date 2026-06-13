@@ -37,8 +37,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable) // Disabled since JWTs are stateless and immune to CSRF
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll() // Open registration/login routes to the public
-                        .anyRequest().authenticated() // Protect every other backend module route
+                        .requestMatchers("/api/v1/auth/**").permitAll() // Open auth endpoints
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll() // Anyone can browse jobs
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs").hasRole("RECRUITER") // Only Recruiters can post
+                        .requestMatchers("/api/v1/jobs/my-postings").hasRole("RECRUITER") // Recruiter dashboard tracking
+                        .anyRequest().authenticated() // Protect everything else
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS) // Enforce stateless API tracking

@@ -13,11 +13,11 @@ import lombok.*;
 public class Profile {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // Let MySQL assign profile IDs cleanly
     private Long id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @MapsId // Shares the primary key with the User entity
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", unique = true, nullable = false) // Direct unique mapping link
     private User user;
 
     @Column(name = "first_name", nullable = false)
