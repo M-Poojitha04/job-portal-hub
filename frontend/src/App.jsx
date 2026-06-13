@@ -4,7 +4,10 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import JobSearch from './pages/JobSearch';
 import PostJob from './pages/PostJob';
-import RecruiterDashboard from './pages/RecruiterDashboard'; // Import our new dashboard component
+import RecruiterDashboard from './pages/RecruiterDashboard';
+import CandidateApplications from './pages/CandidateApplications'; // Import new candidate view
+import ReviewApplicants from './pages/ReviewApplicants';
+import EditProfile from './pages/EditProfile';
 
 function Home() {
     const { user, logout } = useAuth();
@@ -23,6 +26,16 @@ function Home() {
                         {user && user.role === 'RECRUITER' && (
                             <Link to="/dashboard" className="text-sm font-bold text-slate-600 hover:text-blue-600 transition">
                                 Dashboard
+                            </Link>
+                        )}
+                        {user && user.role === 'JOB_SEEKER' && (
+                            <Link to="/my-applications" className="text-sm font-bold text-slate-600 hover:text-blue-600 transition">
+                                My Applications
+                            </Link>
+                        )}
+                        {user && (
+                            <Link to="/profile" className="text-sm font-bold text-slate-600 hover:text-blue-600 transition">
+                                My Profile
                             </Link>
                         )}
                     </div>
@@ -63,9 +76,9 @@ function Home() {
                     <Link to="/browse" className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-3.5 rounded-xl transition shadow-lg shadow-blue-100">
                         Explore Browse Feed
                     </Link>
-                    {user && user.role === 'RECRUITER' && (
-                        <Link to="/dashboard" className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold px-8 py-3.5 rounded-xl transition">
-                            Go to Dashboard
+                    {user && user.role === 'JOB_SEEKER' && (
+                        <Link to="/my-applications" className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold px-8 py-3.5 rounded-xl transition">
+                            View My Applications
                         </Link>
                     )}
                 </div>
@@ -84,7 +97,10 @@ export default function App() {
                     <Route path="/register" element={<Register />} />
                     <Route path="/browse" element={<JobSearch />} />
                     <Route path="/post-job" element={<PostJob />} />
-                    <Route path="/dashboard" element={<RecruiterDashboard />} /> {/* Registered New Recruiter Dashboard Route */}
+                    <Route path="/dashboard" element={<RecruiterDashboard />} />
+                    <Route path="/my-applications" element={<CandidateApplications />} /> {/* Registered New History Route */}
+                    <Route path="/review-applicants/:jobId" element={<ReviewApplicants />} />
+                    <Route path="/profile" element={<EditProfile />} />
                 </Routes>
             </Router>
         </AuthProvider>

@@ -91,6 +91,11 @@ export default function RecruiterDashboard() {
                           {job.status}
                         </span>
                                         </td>
+                                        <td className="p-4 text-center">
+                                            <Link to={`/review-applicants/${job.id}`} className="text-blue-600 hover:text-blue-800 font-bold text-xs underline">
+                                                View Applicants
+                                            </Link>
+                                        </td>
                                     </tr>
                                 ))}
                                 </tbody>

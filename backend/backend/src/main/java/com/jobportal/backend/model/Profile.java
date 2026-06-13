@@ -16,8 +16,9 @@ public class Profile {
     @GeneratedValue(strategy = GenerationType.IDENTITY) // Let MySQL assign profile IDs cleanly
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", unique = true, nullable = false) // Direct unique mapping link
+    @OneToOne(fetch = FetchType.LAZY) // or @ManyToOne depending on your exact Profile.java code
+    @JoinColumn(name = "user_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore // Stops Jackson from trying to serialize the lazy-loaded user proxy
     private User user;
 
     @Column(name = "first_name", nullable = false)

@@ -7,7 +7,6 @@ import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,17 +34,21 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable) // Disabled since JWTs are stateless and immune to CSRF
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll() // Open auth endpoints
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll() // Anyone can browse jobs
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs").hasRole("RECRUITER") // Only Recruiters can post
-                        .requestMatchers("/api/v1/jobs/my-postings").hasRole("RECRUITER") // Recruiter dashboard tracking
-                        .anyRequest().authenticated() // Protect everything else
+                        .requestMatchers("/api/v1/auth/**").permitAll() // 1. Open Auth endpoints
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll() // 2. Public browse
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs").hasRole("RECRUITER") // 3. Recruiter post
+                        .requestMatchers("/api/v1/jobs/my-postings").hasRole("RECRUITER") // 4. Recruiter dashboard query
+                        .requestMatchers("/api/v1/applications/apply/**").hasRole("JOB_SEEKER") // 5. Candidate apply action
+                        .requestMatchers("/api/v1/applications/my-applications").hasRole("JOB_SEEKER") // 6. Candidate application logs
+                        .requestMatchers("/api/v1/applications/job/**").hasRole("RECRUITER") // View applicants list
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/applications/**").hasRole("RECRUITER") // Modify status
+                        .requestMatchers("/api/v1/profiles/**").authenticated() // Secure complete profile context scope rules
+                        .anyRequest().authenticated() // 7. ABSOLUTE FINAL: Protect anything else!
                 )
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS) // Enforce stateless API tracking
-                )
+                // FIX: Added parentheses to call the bean method instead of referencing a non-existent field variable
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -59,10 +62,7 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        // FIX: Pass the userDetailsService directly into the constructor!
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(this.userDetailsService);
-
-        // Explicitly set the password encoder helper bean
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
@@ -81,7 +81,6 @@ public class SecurityConfig {
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // FIX: Pass 'configuration' here instead of 'source'
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
