@@ -8,6 +8,7 @@ import RecruiterDashboard from './pages/RecruiterDashboard';
 import CandidateApplications from './pages/CandidateApplications'; // Import new candidate view
 import ReviewApplicants from './pages/ReviewApplicants';
 import EditProfile from './pages/EditProfile';
+import EditJob from './pages/EditJob';
 
 function Home() {
     const { user, logout } = useAuth();
@@ -101,6 +102,7 @@ export default function App() {
                     <Route path="/my-applications" element={<CandidateApplications />} /> {/* Registered New History Route */}
                     <Route path="/review-applicants/:jobId" element={<ReviewApplicants />} />
                     <Route path="/profile" element={<EditProfile />} />
+                    <Route path="/edit-job/:jobId" element={<EditJob />} />
                 </Routes>
             </Router>
         </AuthProvider>

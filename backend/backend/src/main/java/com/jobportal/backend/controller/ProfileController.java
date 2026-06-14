@@ -56,4 +56,35 @@ public class ProfileController {
         profileRepository.save(existingProfile);
         return ResponseEntity.ok("Success: Profile updated successfully!");
     }
+
+    // Inject our new service bean dependency at the top
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.jobportal.backend.service.FileStorageService fileStorageService;
+
+    @PostMapping(value = "/upload-resume", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadResumeFile(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        try {
+            User user = userRepository.findByEmail(userDetails.getUsername())
+                    .orElseThrow(() -> new UsernameNotFoundException("User identity scope missing"));
+
+            // 1. Write file to local disk directory and extract mapping URL
+            String fileUrl = fileStorageService.storeFile(file);
+
+            // 2. Update profile table data row atomically
+            Profile existingProfile = profileRepository.findByUserId(user.getId())
+                    .orElseGet(() -> Profile.builder().user(user).build());
+
+            existingProfile.setResumeUrl(fileUrl);
+            profileRepository.save(existingProfile);
+
+            return ResponseEntity.ok(java.util.Map.of("resumeUrl", fileUrl, "message", "Success: Resume uploaded successfully!"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body("Error: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Server Error: Unable to process file upload.");
+        }
+    }
 }

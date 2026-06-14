@@ -15,4 +15,7 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
 
     // For Recruiter review screens
     List<JobApplication> findByJobIdOrderByAppliedAtDesc(Long jobId);
+
+    // ADDED FOR METRICS: Counts applications traversing nested entities: Job -> Recruiter -> Id
+    long countByJobRecruiterId(Long recruiterId);
 }

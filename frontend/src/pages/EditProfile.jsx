@@ -13,6 +13,7 @@ export default function EditProfile() {
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
+    const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -37,6 +38,40 @@ export default function EditProfile() {
                 setLoading(false);
             });
     }, []);
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Enforce client-side file extension checkpoint validation
+        if (file.type !== "application/pdf") {
+            setError("Please select a valid PDF file document.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        setUploading(true);
+        setMessage('');
+        setError('');
+        const token = localStorage.getItem('token');
+
+        try {
+            const res = await axiosInstance.post('http://localhost:8080/api/v1/profiles/upload-resume', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            setProfile(prev => ({ ...prev, resumeUrl: res.data.resumeUrl }));
+            setMessage('✓ PDF Resume uploaded and compiled safely to local system directory!');
+        } catch (err) {
+            setError(err.response?.data || 'Failed to upload resume file.');
+        } finally {
+            setUploading(false);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -95,13 +130,24 @@ export default function EditProfile() {
                             <input type="text" value={profile.profilePicUrl} onChange={e => setProfile({...profile, profilePicUrl: e.target.value})} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-500 font-medium font-mono text-xs" placeholder="https://example.com/avatar.png" />
                         </div>
                         <div>
-                            <label className="block mb-1.5">Resume PDF URL</label>
-                            <input type="text" value={profile.resumeUrl} onChange={e => setProfile({...profile, resumeUrl: e.target.value})} className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-500 font-medium font-mono text-xs" placeholder="https://example.com/resume.pdf" />
+                            <label className="block mb-1.5">Upload PDF Resume</label>
+                            <input
+                                type="file"
+                                accept=".pdf"
+                                onChange={handleFileUpload}
+                                className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 cursor-pointer"
+                            />
+                            {uploading && <p className="text-xs text-blue-500 mt-1 font-medium animate-pulse">Uploading file stream...</p>}
+                            {profile.resumeUrl && (
+                                <p className="text-xs text-slate-400 mt-2 font-medium truncate">
+                                    Active file: <a href={`http://localhost:8080${profile.resumeUrl}`} target="_blank" rel="noreferrer" className="text-blue-500 underline font-bold">{profile.resumeUrl}</a>
+                                </p>
+                            )}
                         </div>
                     </div>
 
                     <button type="submit" className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-md shadow-blue-100">
-                        Save Changes
+                        Save Structural Changes
                     </button>
                 </form>
             </div>

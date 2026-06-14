@@ -9,6 +9,11 @@ export default function JobSearch() {
     const [appliedJobIds, setAppliedJobIds] = useState(new Set());
     const [submittingId, setSubmittingId] = useState(null);
 
+    // --- Filter States ---
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedLocation, setSelectedLocation] = useState('ALL');
+    const [selectedType, setSelectedType] = useState('ALL');
+
     const { user } = useAuth();
 
     useEffect(() => {
@@ -41,8 +46,6 @@ export default function JobSearch() {
             await axios.post(`http://localhost:8080/api/v1/applications/apply/${jobId}`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-
-            // Update local state tracker to show success state instantly
             setAppliedJobIds(prev => new Set(prev).add(jobId));
         } catch (err) {
             setError(err.response?.data || 'An error occurred while submitting your application.');
@@ -51,29 +54,95 @@ export default function JobSearch() {
         }
     };
 
+// --- Dynamic Live Filter Logic (Fixed with .includes) ---
+    const filteredJobs = jobs.filter(job => {
+        const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            job.companyName.toLowerCase().includes(searchQuery.toLowerCase());
+
+        // Use .includes() and strip hyphens/spaces to prevent "Onsite" vs "On-site" mismatches
+        const cleanJobLocation = job.location.toLowerCase().replace('-', '');
+        const cleanSelectedLocation = selectedLocation.toLowerCase().replace('-', '');
+
+        const matchesLocation = selectedLocation === 'ALL' ||
+            cleanJobLocation.includes(cleanSelectedLocation);
+
+        const matchesType = selectedType === 'ALL' || job.jobType === selectedType;
+
+        return matchesSearch && matchesLocation && matchesType;
+    });
+
     if (loading) return <div className="text-center py-20 font-medium text-slate-600">Loading active opportunities...</div>;
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-5xl mx-auto">
-                <div className="mb-10 text-center md:text-left">
+
+                {/* Header */}
+                <div className="mb-8 text-center md:text-left">
                     <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Explore Opportunities</h1>
                     <p className="text-slate-500 mt-2 font-medium">Discover your next career milestone backed by relational database tracking.</p>
                 </div>
 
+                {/* --- Search & Filter Panel (Ensure controlled inputs) --- */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Search Keywords</label>
+                        <div className="relative">
+                            <input
+                                type="text"
+                                value={searchQuery} // Maps directly to state
+                                onChange={(e) => setSearchQuery(e.target.value)} // Forces re-render on every single keystroke
+                                placeholder="Search by job title or company name..."
+                                className="w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-500 font-medium text-sm text-slate-800"
+                            />
+                            <span className="absolute right-3.5 top-3 text-slate-400">🔍</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Workplace Type</label>
+                        <select
+                            value={selectedLocation} // Maps directly to state
+                            onChange={(e) => setSelectedLocation(e.target.value)} // Forces re-render on change
+                            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-semibold text-slate-700 outline-none focus:border-blue-500"
+                        >
+                            <option value="ALL">All Locations</option>
+                            <option value="Remote">Remote</option>
+                            <option value="Hybrid">Hybrid</option>
+                            <option value="Onsite">On-site</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Commitment</label>
+                        <select
+                            value={selectedType} // Maps directly to state
+                            onChange={(e) => setSelectedType(e.target.value)} // Forces re-render on change
+                            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-semibold text-slate-700 outline-none focus:border-blue-500"
+                        >
+                            <option value="ALL">All Job Types</option>
+                            <option value="FULL_TIME">Full Time</option>
+                            <option value="PART_TIME">Part Time</option>
+                            <option value="CONTRACT">Contract</option>
+                            <option value="INTERNSHIP">Internship</option>
+                        </select>
+                    </div>
+                </div>
+
                 {error && (
-                    <div className="p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl mb-6 font-semibold shadow-sm transition">
+                    <div className="p-4 bg-red-50 text-red-600 border border-red-200 rounded-xl mb-6 font-semibold shadow-sm">
                         {error}
                     </div>
                 )}
 
-                {jobs.length === 0 ? (
-                    <div className="bg-white text-center p-12 rounded-2xl border border-slate-200 text-slate-500 font-medium">
-                        No active job postings found. Recruiters haven't published positions yet!
+                {/* Job Listings Feed */}
+                {filteredJobs.length === 0 ? (
+                    <div className="bg-white text-center p-12 rounded-2xl border border-slate-200 text-slate-500 font-medium shadow-sm">
+                        No active job postings match your current filter selection. Try adjusting your keywords!
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {jobs.map(job => {
+                        {filteredJobs.map(job => {
                             const hasApplied = appliedJobIds.has(job.id);
 
                             return (

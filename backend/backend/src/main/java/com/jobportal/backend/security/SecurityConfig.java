@@ -38,6 +38,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll() // 1. Open Auth endpoints
+                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/uploads/**").permitAll() // FIX: Open static assets access to allow resume rendering!
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll() // 2. Public browse
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs").hasRole("RECRUITER") // 3. Recruiter post
                         .requestMatchers("/api/v1/jobs/my-postings").hasRole("RECRUITER") // 4. Recruiter dashboard query
@@ -45,6 +47,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/applications/my-applications").hasRole("JOB_SEEKER") // 6. Candidate application logs
                         .requestMatchers("/api/v1/applications/job/**").hasRole("RECRUITER") // View applicants list
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/applications/**").hasRole("RECRUITER") // Modify status
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/jobs/**").hasRole("RECRUITER")
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/jobs/**").hasRole("RECRUITER")
                         .requestMatchers("/api/v1/profiles/**").authenticated() // Secure complete profile context scope rules
                         .anyRequest().authenticated() // 7. ABSOLUTE FINAL: Protect anything else!
                 )
