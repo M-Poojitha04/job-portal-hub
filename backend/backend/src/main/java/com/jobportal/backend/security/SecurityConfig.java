@@ -50,6 +50,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/interviews/**").authenticated()
                         .requestMatchers("/api/v1/analytics/**").authenticated()
                         .requestMatchers("/api/v1/bookmarks/**").authenticated()
+                        .requestMatchers("/api/v1/companies/**").authenticated()
                         // 4. Job specific management rules
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs/**").hasRole("RECRUITER")
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/jobs/**").hasRole("RECRUITER")

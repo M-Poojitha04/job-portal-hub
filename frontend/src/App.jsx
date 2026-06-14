@@ -12,6 +12,7 @@ import ReviewApplicants from './pages/ReviewApplicants';
 import EditProfile from './pages/EditProfile';
 import EditJob from './pages/EditJob';
 import SavedJobs from './pages/SavedJobs';
+import ManageCompany from './pages/ManageCompany';
 
 // --- CLEANED LAYOUT WRAPPER COMPONENT ---
 function MainLayout({ children, unreadNotifications, showDropdown, setShowDropdown, notifications, onClear }) {
@@ -215,6 +216,7 @@ function AppContent() {
                 <Route path="/profile" element={<EditProfile />} />
                 <Route path="/edit-job/:jobId" element={<EditJob />} />
                 <Route path="/saved-jobs" element={<SavedJobs />} />
+                <Route path="/manage-company" element={<ManageCompany />} />
             </Routes>
         </MainLayout>
     );
