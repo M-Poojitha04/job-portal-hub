@@ -8,6 +8,7 @@ export default function JobSearch() {
     const [error, setError] = useState('');
     const [appliedJobIds, setAppliedJobIds] = useState(new Set());
     const [submittingId, setSubmittingId] = useState(null);
+    const [bookmarkedJobIds, setBookmarkedJobIds] = useState(new Set());
 
     // --- Filter States ---
     const [searchQuery, setSearchQuery] = useState('');
@@ -16,6 +17,24 @@ export default function JobSearch() {
 
     const { user } = useAuth();
 
+    // 1. Initial Fetch Hook: Load existing User Bookmarks
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        import('axios').then((rawAxios) => {
+            rawAxios.default.get('http://localhost:8080/api/v1/bookmarks/my-bookmarks', {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+                .then(res => {
+                    const savedIds = new Set(res.data.map(b => b.job.id));
+                    setBookmarkedJobIds(savedIds);
+                })
+                .catch(err => console.log("Bookmarks sync deferred."));
+        });
+    }, []);
+
+    // 2. Secondary Fetch Hook: Load all Active Job Postings
     useEffect(() => {
         axios.get('http://localhost:8080/api/v1/jobs')
             .then(response => {
@@ -27,6 +46,31 @@ export default function JobSearch() {
                 setLoading(false);
             });
     }, []);
+
+    // Interactive Action: Bookmark Toggle Engine Handler
+    const handleBookmarkToggle = async (jobId) => {
+        const token = localStorage.getItem('token');
+        if (!token) return alert("Please log in to save job openings.");
+
+        try {
+            const rawAxios = (await import('axios')).default;
+            const res = await rawAxios.default.post(`http://localhost:8080/api/v1/bookmarks/toggle/${jobId}`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setBookmarkedJobIds(prev => {
+                const next = new Set(prev);
+                if (res.data.bookmarked) {
+                    next.add(jobId);
+                } else {
+                    next.delete(jobId);
+                }
+                return next;
+            });
+        } catch (err) {
+            alert("Could not update bookmark state.");
+        }
+    };
 
     const handleApply = async (jobId) => {
         if (!user) {
@@ -54,12 +98,11 @@ export default function JobSearch() {
         }
     };
 
-// --- Dynamic Live Filter Logic (Fixed with .includes) ---
+    // --- Dynamic Live Filter Logic ---
     const filteredJobs = jobs.filter(job => {
         const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             job.companyName.toLowerCase().includes(searchQuery.toLowerCase());
 
-        // Use .includes() and strip hyphens/spaces to prevent "Onsite" vs "On-site" mismatches
         const cleanJobLocation = job.location.toLowerCase().replace('-', '');
         const cleanSelectedLocation = selectedLocation.toLowerCase().replace('-', '');
 
@@ -83,15 +126,15 @@ export default function JobSearch() {
                     <p className="text-slate-500 mt-2 font-medium">Discover your next career milestone backed by relational database tracking.</p>
                 </div>
 
-                {/* --- Search & Filter Panel (Ensure controlled inputs) --- */}
+                {/* Search & Filter Panel */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2">
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Search Keywords</label>
                         <div className="relative">
                             <input
                                 type="text"
-                                value={searchQuery} // Maps directly to state
-                                onChange={(e) => setSearchQuery(e.target.value)} // Forces re-render on every single keystroke
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search by job title or company name..."
                                 className="w-full pl-4 pr-10 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-500 font-medium text-sm text-slate-800"
                             />
@@ -102,8 +145,8 @@ export default function JobSearch() {
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Workplace Type</label>
                         <select
-                            value={selectedLocation} // Maps directly to state
-                            onChange={(e) => setSelectedLocation(e.target.value)} // Forces re-render on change
+                            value={selectedLocation}
+                            onChange={(e) => setSelectedLocation(e.target.value)}
                             className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-semibold text-slate-700 outline-none focus:border-blue-500"
                         >
                             <option value="ALL">All Locations</option>
@@ -116,8 +159,8 @@ export default function JobSearch() {
                     <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Commitment</label>
                         <select
-                            value={selectedType} // Maps directly to state
-                            onChange={(e) => setSelectedType(e.target.value)} // Forces re-render on change
+                            value={selectedType}
+                            onChange={(e) => setSelectedType(e.target.value)}
                             className="w-full px-3 py-2.5 border border-slate-200 rounded-xl bg-white text-sm font-semibold text-slate-700 outline-none focus:border-blue-500"
                         >
                             <option value="ALL">All Job Types</option>
@@ -144,13 +187,14 @@ export default function JobSearch() {
                     <div className="space-y-4">
                         {filteredJobs.map(job => {
                             const hasApplied = appliedJobIds.has(job.id);
+                            const isBookmarked = bookmarkedJobIds.has(job.id);
 
                             return (
                                 <div key={job.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                     <div>
-                    <span className="inline-block bg-blue-50 text-blue-600 text-xs font-bold px-3 py-1 rounded-full mb-2">
-                      {job.jobType.replace('_', ' ')}
-                    </span>
+                                        <span className="inline-block bg-blue-50 text-blue-600 text-xs font-bold px-3 py-1 rounded-full mb-2">
+                                            {job.jobType.replace('_', ' ')}
+                                        </span>
                                         <h2 className="text-xl font-bold text-slate-900">{job.title}</h2>
                                         <p className="text-slate-700 font-semibold mt-0.5">{job.companyName}</p>
 
@@ -161,17 +205,35 @@ export default function JobSearch() {
                                         </div>
                                     </div>
 
-                                    <button
-                                        onClick={() => handleApply(job.id)}
-                                        disabled={hasApplied || submittingId === job.id}
-                                        className={`w-full md:w-auto font-bold px-6 py-2.5 rounded-xl transition shadow-sm ${
-                                            hasApplied
-                                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-not-allowed'
-                                                : 'bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50'
-                                        }`}
-                                    >
-                                        {submittingId === job.id ? 'Submitting...' : hasApplied ? '✓ Applied' : 'Apply Now'}
-                                    </button>
+                                    {/* Action Group Block */}
+                                    <div className="flex items-center gap-3 w-full md:w-auto justify-end border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
+
+                                        {/* Dynamic Ribbon Toggle Button */}
+                                        <button
+                                            onClick={() => handleBookmarkToggle(job.id)}
+                                            className={`p-2.5 rounded-xl border transition text-sm flex items-center justify-center font-bold shadow-sm ${
+                                                isBookmarked
+                                                    ? 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100'
+                                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                            }`}
+                                            title={isBookmarked ? "Remove Bookmark" : "Save Position"}
+                                        >
+                                            {isBookmarked ? '🔖 Saved' : '🔖 Save'}
+                                        </button>
+
+                                        {/* Core Apply Action */}
+                                        <button
+                                            onClick={() => handleApply(job.id)}
+                                            disabled={hasApplied || submittingId === job.id}
+                                            className={`font-bold px-6 py-2.5 rounded-xl transition shadow-sm flex-1 md:flex-initial ${
+                                                hasApplied
+                                                    ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-not-allowed'
+                                                    : 'bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50'
+                                            }`}
+                                        >
+                                            {submittingId === job.id ? 'Submitting...' : hasApplied ? '✓ Applied' : 'Apply Now'}
+                                        </button>
+                                    </div>
                                 </div>
                             );
                         })}

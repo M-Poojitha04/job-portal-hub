@@ -35,24 +35,31 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll() // 1. Open Auth endpoints
+                        // 1. Public Auth endpoints
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/uploads/**").permitAll() // FIX: Open static assets access to allow resume rendering!
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll() // 2. Public browse
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs").hasRole("RECRUITER") // 3. Recruiter post
-                        .requestMatchers("/api/v1/jobs/my-postings").hasRole("RECRUITER") // 4. Recruiter dashboard query
-                        .requestMatchers("/api/v1/applications/apply/**").hasRole("JOB_SEEKER") // 5. Candidate apply action
-                        .requestMatchers("/api/v1/applications/my-applications").hasRole("JOB_SEEKER") // 6. Candidate application logs
-                        .requestMatchers("/api/v1/applications/job/**").hasRole("RECRUITER") // View applicants list
-                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/applications/**").hasRole("RECRUITER") // Modify status
+
+                        // 2. Public / Shared browse endpoints
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/uploads/resumes/**").permitAll()
+
+                        // 3. Shared Global Authenticated Access Endpoints (Bypasses prefix issues)
+                        .requestMatchers("/api/v1/notifications/**").authenticated()
+                        .requestMatchers("/api/v1/applications/**").authenticated() // Crucial: Sets wide clearance coverage!
+                        .requestMatchers("/api/v1/profiles/**").authenticated()
+                        .requestMatchers("/api/v1/interviews/**").authenticated()
+                        .requestMatchers("/api/v1/analytics/**").authenticated()
+                        .requestMatchers("/api/v1/bookmarks/**").authenticated()
+                        // 4. Job specific management rules
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs/**").hasRole("RECRUITER")
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/jobs/**").hasRole("RECRUITER")
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/jobs/**").hasRole("RECRUITER")
-                        .requestMatchers("/api/v1/profiles/**").authenticated() // Secure complete profile context scope rules
-                        .anyRequest().authenticated() // 7. ABSOLUTE FINAL: Protect anything else!
+
+                        // 5. Generic catch-all
+                        .anyRequest().authenticated()
                 )
-                // FIX: Added parentheses to call the bean method instead of referencing a non-existent field variable
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // FIX 2: Added method calling parentheses () to resolve the compilation syntax error!
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
@@ -61,12 +68,14 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(); // Strong cryptographic password hashing
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
+        // Pass your custom userDetailsService straight into the constructor parameter!
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(this.userDetailsService);
+
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
@@ -79,7 +88,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173")); // Whitelist our React App
+        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
         configuration.setAllowCredentials(true);
