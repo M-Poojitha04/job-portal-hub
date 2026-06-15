@@ -1,12 +1,13 @@
 package com.jobportal.backend.controller;
 
-import com.jobportal.backend.dto.JobRequest;
 import com.jobportal.backend.model.Job;
 import com.jobportal.backend.model.JobStatus;
 import com.jobportal.backend.model.User;
+import com.jobportal.backend.model.Profile;
 import com.jobportal.backend.repository.JobRepository;
 import com.jobportal.backend.repository.UserRepository;
-import jakarta.validation.Valid;
+import com.jobportal.backend.repository.JobApplicationRepository;
+import com.jobportal.backend.repository.ProfileRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -14,6 +15,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/jobs")
@@ -21,21 +23,21 @@ public class JobController {
 
     private final JobRepository jobRepository;
     private final UserRepository userRepository;
-    // 1. ADD THIS FIELD DECLARATION
-    private final com.jobportal.backend.repository.JobApplicationRepository applicationRepository;
+    private final JobApplicationRepository applicationRepository;
+    private final ProfileRepository profileRepository;
 
-    // 2. UPDATE YOUR CONSTRUCTOR TO INJECT IT
+    // Unified Clean Constructor Injection
     public JobController(
             JobRepository jobRepository,
             UserRepository userRepository,
-            com.jobportal.backend.repository.JobApplicationRepository applicationRepository
+            JobApplicationRepository applicationRepository,
+            ProfileRepository profileRepository
     ) {
         this.jobRepository = jobRepository;
         this.userRepository = userRepository;
-        this.applicationRepository = applicationRepository; // Assign it here!
+        this.applicationRepository = applicationRepository;
+        this.profileRepository = profileRepository;
     }
-
-    // ... Your existing mapping endpoints remain exactly the same below ...
 
     // Public Endpoint: Anyone (including unauthenticated guests) can view active listings
     @GetMapping
@@ -44,29 +46,34 @@ public class JobController {
         return ResponseEntity.ok(activeJobs);
     }
 
-    // Secured Endpoint: Only recruiters can create listings
-    @PostMapping
-    public ResponseEntity<?> createJob(
-            @Valid @RequestBody JobRequest request,
+    // Secured Endpoint: Create a new job position linked to corporate company metadata
+    @PostMapping("/create")
+    public ResponseEntity<?> createJobListing(
+            @RequestBody Job jobRequest,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
-        // Look up the active recruiter user profile object attached to the session token context
         User recruiter = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new UsernameNotFoundException("Recruiter account not found"));
+                .orElseThrow(() -> new UsernameNotFoundException("Recruiter session matching failed"));
 
-        Job job = Job.builder()
-                .title(request.getTitle())
-                .description(request.getDescription())
-                .companyName(request.getCompanyName())
-                .location(request.getLocation())
-                .salaryRange(request.getSalaryRange())
-                .experienceRequired(request.getExperienceRequired())
-                .jobType(request.getJobType())
-                .status(JobStatus.PUBLISHED)
-                .recruiter(recruiter)
-                .build();
+        // Retrieve the recruiter's profile data sheet to check linked company variables
+        Profile profile = profileRepository.findByUserId(recruiter.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Recruiter profile parameters not configured"));
 
-        Job savedJob = jobRepository.save(job);
+        // Dynamic Guardrail fallback injection
+        if (profile.getCompany() == null) {
+            return ResponseEntity.badRequest().body("Error: You must fill out your 'Company Profile' page workspace configuration before publishing job positions.");
+        }
+
+        // Auto-assign properties from our managed database models safely
+        jobRequest.setRecruiter(recruiter);
+        jobRequest.setCompanyName(profile.getCompany().getCompanyName()); // Dynamic override auto-population line!
+
+        // Ensure status field maps safely to its model fallback configuration
+        if (jobRequest.getStatus() == null) {
+            jobRequest.setStatus(JobStatus.PUBLISHED);
+        }
+
+        Job savedJob = jobRepository.save(jobRequest);
         return ResponseEntity.ok(savedJob);
     }
 
@@ -80,46 +87,46 @@ public class JobController {
         return ResponseEntity.ok(myJobs);
     }
 
-    // 1. Delete a job posting along with cascading guardrails if needed
+    // Secured Endpoint: Delete a job posting along with cascading ownership guardrails
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteJob(
             @PathVariable Long id,
-            @AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails
+            @AuthenticationPrincipal UserDetails userDetails
     ) {
         User recruiter = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("Recruiter not found"));
+                .orElseThrow(() -> new UsernameNotFoundException("Recruiter not found"));
 
         Job job = jobRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Job posting not found"));
 
         // Security Validation Check: Does the authenticated recruiter own this record?
         if (!job.getRecruiter().getId().equals(recruiter.getId())) {
-            return ResponseEntity.status(430).body("Error: Unauthorized action. You cannot delete this posting.");
+            return ResponseEntity.status(403).body("Error: Unauthorized action. You cannot delete this posting.");
         }
 
         jobRepository.delete(job);
         return ResponseEntity.ok("Success: Job posting removed from core ledger successfully.");
     }
 
-    // 2. Edit an existing job posting's specifications
+    // Secured Endpoint: Edit an existing job posting's specifications
     @PutMapping("/{id}")
     public ResponseEntity<?> updateJob(
             @PathVariable Long id,
             @RequestBody Job jobDetails,
-            @AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails
+            @AuthenticationPrincipal UserDetails userDetails
     ) {
         User recruiter = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("Recruiter not found"));
+                .orElseThrow(() -> new UsernameNotFoundException("Recruiter not found"));
 
         Job job = jobRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Job posting not found"));
 
         // Security Validation Check: Does the authenticated recruiter own this record?
         if (!job.getRecruiter().getId().equals(recruiter.getId())) {
-            return ResponseEntity.status(430).body("Error: Unauthorized action.");
+            return ResponseEntity.status(403).body("Error: Unauthorized action.");
         }
 
-        // Apply modifications across fields
+        // Apply modifications across specifications fields
         job.setTitle(jobDetails.getTitle());
         job.setDescription(jobDetails.getDescription());
         job.setLocation(jobDetails.getLocation());
@@ -131,16 +138,15 @@ public class JobController {
         return ResponseEntity.ok("Success: Job specifications updated cleanly.");
     }
 
+    // Secured Endpoint: Aggregate application volume tracking details
     @GetMapping("/total-applications")
-    public ResponseEntity<?> getTotalApplicationsCount(
-            @AuthenticationPrincipal org.springframework.security.core.userdetails.UserDetails userDetails
-    ) {
+    public ResponseEntity<?> getTotalApplicationsCount(@AuthenticationPrincipal UserDetails userDetails) {
         User recruiter = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("Recruiter not found"));
+                .orElseThrow(() -> new UsernameNotFoundException("Recruiter not found"));
 
         // Count how many applications exist across all jobs published by this recruiter
         long totalApplicationsCount = applicationRepository.countByJobRecruiterId(recruiter.getId());
 
-        return ResponseEntity.ok(java.util.Map.of("totalApplications", totalApplicationsCount));
+        return ResponseEntity.ok(Map.of("totalApplications", totalApplicationsCount));
     }
 }

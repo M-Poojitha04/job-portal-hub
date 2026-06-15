@@ -15,7 +15,6 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-// This handles Hibernate lazy proxies safely across the entire User entity serialization footprint
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class User {
 
@@ -30,7 +29,7 @@ public class User {
 
     @NotBlank(message = "Password is required")
     @Column(nullable = false)
-    @JsonIgnore // Extra security layer: Never send password hashes over public API payloads
+    @JsonIgnore
     private String password;
 
     @Enumerated(EnumType.STRING)
@@ -38,7 +37,8 @@ public class User {
     private Role role;
 
     @Column(name = "is_active", nullable = false)
-    private Boolean isActive = true;
+    @Builder.Default
+    private boolean isActive = true; // System Moderation State Flag: Defaults to true for new accounts
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -47,4 +47,10 @@ public class User {
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
     }
+
+    @Column(name = "reset_token")
+    private String resetToken;
+
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
 }

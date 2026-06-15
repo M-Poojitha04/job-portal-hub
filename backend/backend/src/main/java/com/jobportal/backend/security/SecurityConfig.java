@@ -51,6 +51,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/analytics/**").authenticated()
                         .requestMatchers("/api/v1/bookmarks/**").authenticated()
                         .requestMatchers("/api/v1/companies/**").authenticated()
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
+                        .requestMatchers("/ws-portal/**").permitAll()
+                        .requestMatchers("/api/v1/ai/**").hasRole("JOB_SEEKER")
                         // 4. Job specific management rules
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs/**").hasRole("RECRUITER")
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/jobs/**").hasRole("RECRUITER")

@@ -28,5 +28,9 @@ public class Company {
     private String website;
 
     @Column(name = "social_links")
-    private String socialLinks; // Can hold a LinkedIn URL or combined social handles text line
+    private String socialLinks;
+
+    @Column(name = "is_verified", nullable = false)
+    @Builder.Default
+    private boolean isVerified = false; // Admin Verification State Flag: Requires explicit admin sign-off
 }

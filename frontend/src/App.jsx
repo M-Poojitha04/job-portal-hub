@@ -13,6 +13,11 @@ import EditProfile from './pages/EditProfile';
 import EditJob from './pages/EditJob';
 import SavedJobs from './pages/SavedJobs';
 import ManageCompany from './pages/ManageCompany';
+import AdminDashboard from './pages/AdminDashboard';
+import ResetPassword from "./pages/ResetPassword.jsx";
+import WebSocketNotificationListener from './context/WebSocketNotificationListener';
+import AIResumeParser from './pages/AIResumeParser';
+
 
 // --- CLEANED LAYOUT WRAPPER COMPONENT ---
 function MainLayout({ children, unreadNotifications, showDropdown, setShowDropdown, notifications, onClear }) {
@@ -204,6 +209,7 @@ function AppContent() {
             notifications={notificationsList}
             onClear={clearAllNotifications}
         >
+            <WebSocketNotificationListener />
             <Routes>
                 <Route path="/" element={<HomeHero />} />
                 <Route path="/login" element={<Login />} />
@@ -217,6 +223,9 @@ function AppContent() {
                 <Route path="/edit-job/:jobId" element={<EditJob />} />
                 <Route path="/saved-jobs" element={<SavedJobs />} />
                 <Route path="/manage-company" element={<ManageCompany />} />
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/ai-parser" element={<AIResumeParser />} />
             </Routes>
         </MainLayout>
     );
