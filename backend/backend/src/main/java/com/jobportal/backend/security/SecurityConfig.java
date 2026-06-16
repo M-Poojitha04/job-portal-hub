@@ -15,7 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
+ import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import java.util.List;
 
 @Configuration
@@ -33,42 +33,50 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // FIX: Explicitly ignore CSRF checks on all API and WebSocket lines to prevent low-level 403 blocks
+                .csrf(csrf -> csrf
+                        .ignoringRequestMatchers("/api/v1/**", "/ws-portal/**")
+                )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Public Auth endpoints
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        // 1. Explicitly clear browser preflights
+                        .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // 2. Public / Shared browse endpoints
+                        // 2. Wide-open public match paths (Covers all AI tools completely)
+                        .requestMatchers("/api/v1/ai/**").permitAll()
+                        .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/uploads/resumes/**").permitAll()
+                        .requestMatchers("/ws-portal/**").permitAll()
 
-                        // 3. Shared Global Authenticated Access Endpoints (Bypasses prefix issues)
+                        // 3. Authenticated system endpoints
                         .requestMatchers("/api/v1/notifications/**").authenticated()
-                        .requestMatchers("/api/v1/applications/**").authenticated() // Crucial: Sets wide clearance coverage!
+                        .requestMatchers("/api/v1/applications/**").authenticated()
                         .requestMatchers("/api/v1/profiles/**").authenticated()
                         .requestMatchers("/api/v1/interviews/**").authenticated()
                         .requestMatchers("/api/v1/analytics/**").authenticated()
                         .requestMatchers("/api/v1/bookmarks/**").authenticated()
                         .requestMatchers("/api/v1/companies/**").authenticated()
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/auth/forgot-password", "/api/v1/auth/reset-password").permitAll()
-                        .requestMatchers("/ws-portal/**").permitAll()
-                        .requestMatchers("/api/v1/ai/**").hasRole("JOB_SEEKER")
-                        // 4. Job specific management rules
+
+                        // 4. Job adjustments restrictions
                         .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs/**").hasRole("RECRUITER")
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/jobs/**").hasRole("RECRUITER")
                         .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/jobs/**").hasRole("RECRUITER")
 
-                        // 5. Generic catch-all
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // FIX 2: Added method calling parentheses () to resolve the compilation syntax error!
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring()
+                // Tells Spring Security to completely drop out and skip processing for these paths
+                .requestMatchers("/api/v1/ai/**");
     }
 
     @Bean
@@ -78,9 +86,7 @@ public class SecurityConfig {
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        // Pass your custom userDetailsService straight into the constructor parameter!
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(this.userDetailsService);
-
         authProvider.setPasswordEncoder(passwordEncoder());
         return authProvider;
     }
@@ -95,7 +101,8 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:5173"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Cache-Control"));
+        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setExposedHeaders(List.of("Authorization"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

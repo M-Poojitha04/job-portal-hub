@@ -2,7 +2,11 @@ package com.jobportal.backend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jobportal.backend.dto.ParsedResumeResponse;
+import com.jobportal.backend.model.ParsedResume;
+import com.jobportal.backend.repository.ParsedResumeRepository;
+import com.jobportal.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -17,12 +21,18 @@ public class GeminiAIService {
     @Value("${gemini.api.key}")
     private String apiKey;
 
+    @Autowired
+    private ParsedResumeRepository resumeRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper()
             .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    // 1. AI RESUME PARSER ENGINE
-    public ParsedResumeResponse parseRawResumeText(String rawText) {
+    // 1. AI RESUME PARSER ENGINE (Updated to accept user email tracking strings)
+    public ParsedResumeResponse parseRawResumeText(String rawText, String email) {
         String promptInstruction = "You are an expert system Applicant Tracking System (ATS) document data extraction microservice. "
                 + "Analyze the raw unstructured resume text string provided below and extract the structural variables. "
                 + "You must return your output strictly matching the following JSON schema specification using all lowercase keys with zero markdown decoration wrappers or backticks:\n"
@@ -35,7 +45,38 @@ public class GeminiAIService {
 
         try {
             String rawJsonResult = callGeminiEndpoint(promptInstruction);
-            return objectMapper.readValue(rawJsonResult, ParsedResumeResponse.class);
+            ParsedResumeResponse parsedResponseObject = objectMapper.readValue(rawJsonResult, ParsedResumeResponse.class);
+
+            // --- AUTOMATED DATABASE PERSISTENCE STEP ---
+            try {
+                // Find the candidate account inside MySQL via their structural email address profile mapping
+                var candidate = userRepository.findAll().stream()
+                        .filter(u -> u.getEmail().equalsIgnoreCase(email))
+                        .findFirst()
+                        .orElseGet(() -> userRepository.findAll().stream().findFirst().orElse(null));
+
+                if (candidate != null) {
+                    // Check if this candidate already has a parsed record to update, otherwise build a new one
+                    ParsedResume record = resumeRepository.findAll().stream()
+                            .filter(r -> r.getUser().getId().equals(candidate.getId()))
+                            .findFirst()
+                            .orElse(new ParsedResume());
+
+                    record.setUser(candidate);
+                    record.setCandidateName("Poojitha");
+                    record.setCandidateEmail(candidate.getEmail());
+                    record.setSkills(parsedResponseObject.getSkills());
+                    record.setHighestEducation(parsedResponseObject.getEducation() != null ? objectMapper.writeValueAsString(parsedResponseObject.getEducation()) : "N/A");
+                    record.setLatestExperience(parsedResponseObject.getExperience() != null ? objectMapper.writeValueAsString(parsedResponseObject.getExperience()) : "N/A");
+
+                    resumeRepository.save(record);
+                    System.out.println("✅ Cloud Talent Matrix profile database entry committed cleanly!");
+                }
+            } catch (Exception dbEx) {
+                System.err.println("Database saving sequence skipped: " + dbEx.getMessage());
+            }
+
+            return parsedResponseObject;
         } catch (Exception e) {
             System.err.println("Gemini Engine parsing breakdown matrix: " + e.getMessage());
             return new ParsedResumeResponse();

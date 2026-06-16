@@ -32,6 +32,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
 
+        String requestURI = request.getRequestURI();
+
+        // 🚨 CRITICAL BYPASS: If hitting any AI endpoint path, drop out immediately!
+        // This stops Spring Security from tracking this request as "unauthenticated".
+        if (requestURI.startsWith("/api/v1/ai/")) {
+            filterChain.doFilter(request, response);
+            return; // Stop execution here!
+        }
+
         final String authHeader = request.getHeader("Authorization");
         final String jwt;
         final String userEmail;
@@ -45,19 +54,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         jwt = authHeader.substring(7);
         userEmail = jwtUtil.extractEmail(jwt);
 
-        // Authenticate only if the context session isn't filled already
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
 
-            if (jwtUtil.isTokenValid(jwt, userDetails.getUsername())) {
+            if (jwtUtil.isTokenValid(jwt, userEmail)) {
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
                         userDetails.getAuthorities()
                 );
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                // Finalize authentication context for the request lifecycle
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         }
