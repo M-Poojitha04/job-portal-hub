@@ -34,11 +34,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String requestURI = request.getRequestURI();
 
-        // 🚨 CRITICAL BYPASS: If hitting any AI endpoint path, drop out immediately!
-        // This stops Spring Security from tracking this request as "unauthenticated".
-        if (requestURI.startsWith("/api/v1/ai/")) {
+        // 🛠️ CRITICAL URGENT FIX: Check via request context properties to guarantee execution skip
+        if (requestURI != null && (requestURI.contains("/uploads") || requestURI.contains("uploads") || requestURI.startsWith("/api/v1/ai/"))) {
+            System.out.println("🚀 [JWT FILTER BYPASS SUCCESS] Skipping validation for: " + requestURI);
             filterChain.doFilter(request, response);
-            return; // Stop execution here!
+            return; // Hard stop
         }
 
         final String authHeader = request.getHeader("Authorization");
@@ -69,5 +69,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        if (path == null) return false;
+
+        // Match the identical broad paradigm to completely keep Spring's proxy registry clean
+        return path.startsWith("/api/v1/auth/") ||
+                path.startsWith("/api/v1/ai/") ||
+                path.startsWith("/ws-portal/") ||
+                path.contains("uploads");
+
     }
 }

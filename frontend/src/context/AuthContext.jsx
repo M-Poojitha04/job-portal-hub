@@ -11,9 +11,15 @@ export function AuthProvider({ children }) {
         const savedToken = localStorage.getItem('token');
         const savedEmail = localStorage.getItem('email');
         const savedRole = localStorage.getItem('role');
+        const savedAvatar = localStorage.getItem('profilePicUrl'); // UPDATED: Session tracker
 
         if (savedToken && savedEmail && savedRole) {
-            setUser({ token: savedToken, email: savedEmail, role: savedRole });
+            setUser({
+                token: savedToken,
+                email: savedEmail,
+                role: savedRole,
+                profilePicUrl: savedAvatar || '' // UPDATED: State property fallback binding
+            });
         }
         setLoading(false);
     }, []);
@@ -22,12 +28,15 @@ export function AuthProvider({ children }) {
         localStorage.setItem('token', authData.token);
         localStorage.setItem('email', authData.email);
         localStorage.setItem('role', authData.role);
+        if (authData.profilePicUrl) {
+            localStorage.setItem('profilePicUrl', authData.profilePicUrl);
+        }
         setUser(authData);
     };
 
     const logout = () => {
-        localStorage.clear();
-        setUser(null);
+        localStorage.clear(); // Wipes token, email, role, and avatar allocations simultaneously
+        setUser(null);        // Triggers downstream reactive re-render sweeps
     };
 
     return (

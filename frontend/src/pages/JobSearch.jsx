@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios from 'axios'; // Standard Axios import
 import { useAuth } from '../context/AuthContext';
+import { Link, useLocation } from 'react-router-dom';
 
 export default function JobSearch() {
     const [jobs, setJobs] = useState([]);
@@ -10,33 +11,55 @@ export default function JobSearch() {
     const [submittingId, setSubmittingId] = useState(null);
     const [bookmarkedJobIds, setBookmarkedJobIds] = useState(new Set());
 
+    // --- DIALOG OVERLAY VIEW TRACKER HOOK ---
+    const [selectedJob, setSelectedJob] = useState(null);
+
     // --- Filter States ---
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedLocation, setSelectedLocation] = useState('ALL');
     const [selectedType, setSelectedType] = useState('ALL');
 
     const { user } = useAuth();
+    const location = useLocation();
+    const token = localStorage.getItem('token');
 
-    // 1. Initial Fetch Hook: Load existing User Bookmarks
+    // Extract dynamic redirect text from state parameters passed down from the homepage
+    const guestNoticeMessage = location.state?.message || "Please create an account or sign in to access the active corporate job feed.";
+
+    // 1. Initial Fetch Hook: Load user bookmarks ONLY if authenticated
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+        // 🛠️ CRITICAL GUARDRAIL: If token is null, undefined, or empty, DO NOT fire the network request!
+        if (!token || token === "null" || token === "undefined") {
+            return;
+        }
 
-        import('axios').then((rawAxios) => {
-            rawAxios.default.get('http://localhost:8080/api/v1/bookmarks/my-bookmarks', {
-                headers: { Authorization: `Bearer ${token}` }
-            })
-                .then(res => {
-                    const savedIds = new Set(res.data.map(b => b.job.id));
+        axios.get('http://localhost:8080/api/v1/bookmarks/my-bookmarks', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+            .then(res => {
+                if (Array.isArray(res.data)) {
+                    const savedIds = new Set(
+                        res.data
+                            .filter(b => b && b.job && b.job.id)
+                            .map(b => b.job.id)
+                    );
                     setBookmarkedJobIds(savedIds);
-                })
-                .catch(err => console.log("Bookmarks sync deferred."));
-        });
-    }, []);
+                }
+            })
+            .catch(err => console.log("Bookmarks sync deferred.", err));
+    }, [token]);
 
-    // 2. Secondary Fetch Hook: Load all Active Job Postings
+    // 2. Secondary Fetch Hook: Load all active job postings ONLY if authenticated
     useEffect(() => {
-        axios.get('http://localhost:8080/api/v1/jobs')
+        // 🛠️ CRITICAL GUARDRAIL: Same check here to prevent pre-load 403s
+        if (!token || token === "null" || token === "undefined") {
+            setLoading(false);
+            return;
+        }
+
+        axios.get('http://localhost:8080/api/v1/jobs', {
+            headers: { Authorization: `Bearer ${token}` }
+        })
             .then(response => {
                 setJobs(response.data);
                 setLoading(false);
@@ -45,16 +68,29 @@ export default function JobSearch() {
                 setError('Failed to fetch job postings. Please try again later.');
                 setLoading(false);
             });
-    }, []);
+    }, [token]);
+    // --- GUEST AUTHENTICATION GATE ---
+    if (!token) {
+        return (
+            <div className="min-h-[75vh] bg-slate-50 flex items-center justify-center px-4 py-16">
+                <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200/80 p-8 text-center shadow-xl shadow-slate-100">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-5">🔒</div>
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Authentication Required</h2>
+                    <p className="text-sm font-medium text-slate-500 mt-3 leading-relaxed">{guestNoticeMessage}</p>
+                    <div className="mt-8 space-y-3">
+                        <Link to="/login" className="block w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md shadow-blue-100 transition text-sm text-center">Sign In to My Account</Link>
+                        <Link to="/register" className="block w-full bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold py-3 px-4 rounded-xl transition text-sm text-center">Create New Account</Link>
+                    </div>
+                    <Link to="/" className="inline-block mt-6 text-xs text-slate-400 font-bold hover:text-blue-600 transition underline decoration-2">← Back to Homepage</Link>
+                </div>
+            </div>
+        );
+    }
 
-    // Interactive Action: Bookmark Toggle Engine Handler
+// Interactive Action: Bookmark Toggle Engine Handler
     const handleBookmarkToggle = async (jobId) => {
-        const token = localStorage.getItem('token');
-        if (!token) return alert("Please log in to save job openings.");
-
         try {
-            const rawAxios = (await import('axios')).default;
-            const res = await rawAxios.default.post(`http://localhost:8080/api/v1/bookmarks/toggle/${jobId}`, {}, {
+            const res = await axios.post(`http://localhost:8080/api/v1/bookmarks/toggle/${jobId}`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -84,7 +120,6 @@ export default function JobSearch() {
 
         setSubmittingId(jobId);
         setError('');
-        const token = localStorage.getItem('token');
 
         try {
             await axios.post(`http://localhost:8080/api/v1/applications/apply/${jobId}`, {}, {
@@ -100,15 +135,13 @@ export default function JobSearch() {
 
     // --- Dynamic Live Filter Logic ---
     const filteredJobs = jobs.filter(job => {
-        const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            job.companyName.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = job.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            job.companyName?.toLowerCase().includes(searchQuery.toLowerCase());
 
-        const cleanJobLocation = job.location.toLowerCase().replace('-', '');
+        const cleanJobLocation = job.location?.toLowerCase().replace('-', '') || '';
         const cleanSelectedLocation = selectedLocation.toLowerCase().replace('-', '');
 
-        const matchesLocation = selectedLocation === 'ALL' ||
-            cleanJobLocation.includes(cleanSelectedLocation);
-
+        const matchesLocation = selectedLocation === 'ALL' || cleanJobLocation.includes(cleanSelectedLocation);
         const matchesType = selectedType === 'ALL' || job.jobType === selectedType;
 
         return matchesSearch && matchesLocation && matchesType;
@@ -190,10 +223,14 @@ export default function JobSearch() {
                             const isBookmarked = bookmarkedJobIds.has(job.id);
 
                             return (
-                                <div key={job.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md transition flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                <div
+                                    key={job.id}
+                                    onClick={() => setSelectedJob(job)}
+                                    className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500/40 hover:shadow-md transition duration-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 cursor-pointer text-left"
+                                >
                                     <div>
                                         <span className="inline-block bg-blue-50 text-blue-600 text-xs font-bold px-3 py-1 rounded-full mb-2">
-                                            {job.jobType.replace('_', ' ')}
+                                            {job.jobType?.replace('_', ' ') || 'N/A'}
                                         </span>
                                         <h2 className="text-xl font-bold text-slate-900">{job.title}</h2>
                                         <p className="text-slate-700 font-semibold mt-0.5">{job.companyName}</p>
@@ -205,10 +242,10 @@ export default function JobSearch() {
                                         </div>
                                     </div>
 
-                                    {/* Action Group Block */}
-                                    <div className="flex items-center gap-3 w-full md:w-auto justify-end border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
-
-                                        {/* Dynamic Ribbon Toggle Button */}
+                                    <div
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="flex items-center gap-3 w-full md:w-auto justify-end border-t md:border-t-0 pt-4 md:pt-0 border-slate-100"
+                                    >
                                         <button
                                             onClick={() => handleBookmarkToggle(job.id)}
                                             className={`p-2.5 rounded-xl border transition text-sm flex items-center justify-center font-bold shadow-sm ${
@@ -221,7 +258,6 @@ export default function JobSearch() {
                                             {isBookmarked ? '🔖 Saved' : '🔖 Save'}
                                         </button>
 
-                                        {/* Core Apply Action */}
                                         <button
                                             onClick={() => handleApply(job.id)}
                                             disabled={hasApplied || submittingId === job.id}
@@ -239,6 +275,83 @@ export default function JobSearch() {
                         })}
                     </div>
                 )}
+
+                {/* --- DETAILED DIALOG MODAL LAYER OVERLAY --- */}
+                {selectedJob && (() => {
+                    const hasApplied = appliedJobIds.has(selectedJob.id);
+                    const isBookmarked = bookmarkedJobIds.has(selectedJob.id);
+
+                    return (
+                        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
+                            <div className="bg-white max-w-2xl w-full rounded-3xl shadow-2xl border border-slate-100 p-8 relative max-h-[85vh] overflow-y-auto flex flex-col text-left scale-100 transition-transform">
+
+                                <button
+                                    onClick={() => setSelectedJob(null)}
+                                    className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 bg-slate-100 hover:bg-slate-200 w-8 h-8 rounded-full flex items-center justify-center text-sm font-black transition outline-none"
+                                >
+                                    ✕
+                                </button>
+
+                                <div className="border-b border-slate-100 pb-4 mb-5">
+                                    <span className="inline-block text-[10px] font-black bg-blue-50 text-blue-600 px-3 py-1 rounded-full tracking-wider uppercase mb-2">
+                                        {selectedJob.jobType?.replace('_', ' ') || 'N/A'}
+                                    </span>
+                                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">{selectedJob.title}</h2>
+                                    <p className="text-base font-bold text-blue-600 mt-0.5">{selectedJob.companyName}</p>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200/50 rounded-2xl mb-6 text-center">
+                                    <div>
+                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location</span>
+                                        <span className="text-xs font-black text-slate-700 block mt-1">📍 {selectedJob.location}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Salary</span>
+                                        <span className="text-xs font-black text-slate-700 block mt-1">💰 {selectedJob.salaryRange || 'Not Stated'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Experience</span>
+                                        <span className="text-xs font-black text-slate-700 block mt-1">💼 {selectedJob.experienceRequired}Y+ Req</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-y-auto space-y-2 mb-6">
+                                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Role Specifications & Description</h4>
+                                    <p className="text-sm font-medium text-slate-600 leading-relaxed bg-slate-50/40 p-4 border border-slate-100 rounded-xl whitespace-pre-line">
+                                        {selectedJob.description || "No description provided for this opening."}
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
+                                    <button
+                                        onClick={() => handleBookmarkToggle(selectedJob.id)}
+                                        className={`px-5 py-3 rounded-xl border font-bold text-sm transition flex items-center justify-center gap-1.5 shadow-sm ${
+                                            isBookmarked
+                                                ? 'bg-amber-50 text-amber-600 border-amber-200'
+                                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                        }`}
+                                    >
+                                        {isBookmarked ? '🔖 Saved' : '🔖 Save'}
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            handleApply(selectedJob.id);
+                                        }}
+                                        disabled={hasApplied || submittingId === selectedJob.id}
+                                        className={`flex-1 font-bold py-3 rounded-xl transition shadow-md shadow-blue-100 text-sm ${
+                                            hasApplied
+                                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-not-allowed shadow-none'
+                                                : 'bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50'
+                                        }`}
+                                    >
+                                        {submittingId === selectedJob.id ? 'Submitting...' : hasApplied ? '✓ Application Submitted' : 'Apply For Position Now'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
         </div>
     );

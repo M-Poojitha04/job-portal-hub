@@ -36,6 +36,9 @@ public class BookmarkController {
             @PathVariable Long jobId,
             @AuthenticationPrincipal UserDetails userDetails
     ) {
+        // 🔍 DEBUG TRACE PRINT: See if frontend click hits backend
+        System.out.println("⭐ [BOOKMARK TOGGLE REQUEST] Received request for Job ID: " + jobId + " from user: " + userDetails.getUsername());
+
         User user = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("User session invalid"));
 
@@ -45,20 +48,55 @@ public class BookmarkController {
         return bookmarkRepository.findByUserIdAndJobId(user.getId(), jobId)
                 .map(bookmark -> {
                     bookmarkRepository.delete(bookmark);
+                    System.out.println("❌ [BOOKMARK DELETED] Removed Job ID " + jobId + " from user database record.");
                     return ResponseEntity.ok(Map.of("bookmarked", false, "message", "Bookmark removed cleanly"));
                 })
                 .orElseGet(() -> {
                     bookmarkRepository.save(BookmarkedJob.builder().user(user).job(job).build());
+                    System.out.println("📝 [BOOKMARK SAVED] Persisted Job ID " + jobId + " to user database record.");
                     return ResponseEntity.ok(Map.of("bookmarked", true, "message", "Job position bookmarked successfully"));
                 });
     }
 
     // Get list of all saved jobs for active candidate session
     @GetMapping("/my-bookmarks")
-    public ResponseEntity<List<BookmarkedJob>> getMyBookmarks(@AuthenticationPrincipal UserDetails userDetails) {
-        User user = userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("User session invalid"));
-        return ResponseEntity.ok(bookmarkRepository.findByUserId(user.getId()));
+    public ResponseEntity<?> getMyBookmarks(@AuthenticationPrincipal UserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+
+        User user = userRepository.findByEmail(userDetails.getUsername()).orElse(null);
+        if (user == null) {
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+
+        // 1. Fetch raw bookmarks from database
+        List<BookmarkedJob> rawBookmarks = bookmarkRepository.findByUserId(user.getId());
+
+        // 2. Extract only clean, flat data structures to avoid any lazy-loading proxy loop or CORS crashes
+        List<Map<String, Object>> serializedPayload = rawBookmarks.stream()
+                .filter(b -> b != null && b.getJob() != null)
+                .map(b -> {
+                    Map<String, Object> bookmarkMap = new java.util.HashMap<>();
+                    bookmarkMap.put("id", b.getId());
+
+                    // Nest clean job fields manually
+                    Map<String, Object> jobMap = new java.util.HashMap<>();
+                    jobMap.put("id", b.getJob().getId());
+                    jobMap.put("title", b.getJob().getTitle());
+                    jobMap.put("companyName", b.getJob().getCompanyName());
+                    jobMap.put("location", b.getJob().getLocation());
+                    jobMap.put("jobType", b.getJob().getJobType() != null ? b.getJob().getJobType().toString() : "FULL_TIME");
+                    jobMap.put("salaryRange", b.getJob().getSalaryRange());
+                    jobMap.put("experienceRequired", b.getJob().getExperienceRequired());
+
+                    bookmarkMap.put("job", jobMap);
+                    return bookmarkMap;
+                })
+                .collect(java.util.stream.Collectors.toList());
+
+        // 3. Return the completely decoupled, pure data payload
+        return ResponseEntity.ok(serializedPayload);
     }
 
     // Check check mark baseline state map for frontend listing views

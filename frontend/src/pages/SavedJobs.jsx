@@ -18,10 +18,12 @@ export default function SavedJobs() {
                 headers: { Authorization: `Bearer ${token}` }
             })
                 .then(res => {
-                    setBookmarks(res.data);
+                    // ✅ DEFENSIVE CHECK: Always fall back to an array to prevent breaking on empty loads
+                    setBookmarks(Array.isArray(res.data) ? res.data : []);
                     setLoading(false);
                 })
                 .catch(() => {
+                    setBookmarks([]);
                     setLoading(false);
                 });
         });
@@ -34,7 +36,8 @@ export default function SavedJobs() {
             await rawAxios.default.post(`http://localhost:8080/api/v1/bookmarks/toggle/${jobId}`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setBookmarks(prev => prev.filter(b => b.job.id !== jobId));
+            // Track clean nested structure safely
+            setBookmarks(prev => prev.filter(b => b?.job?.id !== jobId));
         } catch (err) {
             alert("Could not update bookmark state.");
         }
@@ -56,31 +59,36 @@ export default function SavedJobs() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-4">
-                        {bookmarks.map(b => (
-                            <div key={b.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <div>
-                                    <h3 className="text-xl font-bold text-slate-900">{b.job.title}</h3>
-                                    <p className="text-sm font-semibold text-slate-500 mt-0.5">🏢 {b.job.companyName} • 📍 {b.job.location}</p>
-                                    <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold mt-2 inline-block">
-                                        {b.job.jobType ? b.job.jobType.replace('_', ' ') : 'Full Time'}
-                                    </span>
+                        {bookmarks.map(b => {
+                            // Guard check to make sure nested object exists before rendering properties
+                            if (!b || !b.job) return null;
+
+                            return (
+                                <div key={b.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-slate-900">{b.job.title}</h3>
+                                        <p className="text-sm font-semibold text-slate-500 mt-0.5">🏢 {b.job.companyName || 'Corporate'} • 📍 {b.job.location}</p>
+                                        <span className="text-[11px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-bold mt-2 inline-block">
+                                            {b.job.jobType ? b.job.jobType.replace('_', ' ') : 'Full Time'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                                        <button
+                                            onClick={() => handleRemoveBookmark(b.job.id)}
+                                            className="text-xs font-bold text-slate-400 hover:text-red-500 transition px-3 py-2"
+                                        >
+                                            Remove
+                                        </button>
+                                        <Link
+                                            to={`/browse?jobId=${b.job.id}`}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-sm"
+                                        >
+                                            View Details & Apply
+                                        </Link>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                                    <button
-                                        onClick={() => handleRemoveBookmark(b.job.id)}
-                                        className="text-xs font-bold text-slate-400 hover:text-red-500 transition px-3 py-2"
-                                    >
-                                        Remove
-                                    </button>
-                                    <Link
-                                        to={`/browse?jobId=${b.job.id}`} // Simple routing redirect pointer link
-                                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-sm"
-                                    >
-                                        View Details & Apply
-                                    </Link>
-                                </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>

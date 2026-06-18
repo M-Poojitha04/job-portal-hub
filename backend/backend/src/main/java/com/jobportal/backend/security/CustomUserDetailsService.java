@@ -21,19 +21,32 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(email)
+        // 1. Fetch user from DB and throw a clean exception if missing
+        com.jobportal.backend.model.User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
 
-        // Format role precisely as "ROLE_JOB_SEEKER" for Spring Security RBAC compatibility
-        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + user.getRole().name());
+        // 2. Safe string normalizer for the role prefixing mapping
+        String rawRole = user.getRole() != null ? user.getRole().toString().toUpperCase().trim() : "JOB_SEEKER";
 
+        // 3. Strip structural duplication if the string in the DB already includes "ROLE_"
+        if (rawRole.startsWith("ROLE_")) {
+            rawRole = rawRole.replace("ROLE_", "");
+        }
+
+        // 4. Format role precisely as "ROLE_X" for strict Spring Security RBAC filter matching
+        SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + rawRole);
+
+        System.out.println("🔐 Authenticating User: " + user.getEmail());
+        System.out.println("🎭 Assigned Security Authority: " + authority.getAuthority());
+
+        // 5. Construct the final authenticated UserDetails package container
         return new org.springframework.security.core.userdetails.User(
                 user.getEmail(),
                 user.getPassword(),
-                user.isActive(), // Updated getter helper reference
-                true, // accountNonExpired
-                true, // credentialsNonExpired
-                true, // accountNonLocked
+                user.isActive(),            // Enabled flag condition check
+                true,                       // accountNonExpired
+                true,                       // credentialsNonExpired
+                true,                       // accountNonLocked
                 java.util.Collections.singletonList(authority)
         );
     }

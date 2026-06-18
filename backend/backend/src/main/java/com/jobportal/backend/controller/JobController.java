@@ -46,7 +46,7 @@ public class JobController {
         return ResponseEntity.ok(activeJobs);
     }
 
-    // Secured Endpoint: Create a new job position linked to corporate company metadata
+    // Secured Endpoint: Create a new job position linked directly to custom typed company metadata
     @PostMapping("/create")
     public ResponseEntity<?> createJobListing(
             @RequestBody Job jobRequest,
@@ -55,18 +55,11 @@ public class JobController {
         User recruiter = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("Recruiter session matching failed"));
 
-        // Retrieve the recruiter's profile data sheet to check linked company variables
-        Profile profile = profileRepository.findByUserId(recruiter.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Recruiter profile parameters not configured"));
-
-        // Dynamic Guardrail fallback injection
-        if (profile.getCompany() == null) {
-            return ResponseEntity.badRequest().body("Error: You must fill out your 'Company Profile' page workspace configuration before publishing job positions.");
-        }
+        // REMOVED: Profile dependency and company lookup assertions have been bypassed to support blank database slates.
+        // The companyName string comes directly from the interactive frontend input field instead.
 
         // Auto-assign properties from our managed database models safely
         jobRequest.setRecruiter(recruiter);
-        jobRequest.setCompanyName(profile.getCompany().getCompanyName()); // Dynamic override auto-population line!
 
         // Ensure status field maps safely to its model fallback configuration
         if (jobRequest.getStatus() == null) {

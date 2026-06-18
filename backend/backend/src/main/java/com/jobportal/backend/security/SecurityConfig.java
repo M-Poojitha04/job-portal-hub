@@ -15,7 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
- import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import java.util.List;
 
 @Configuration
@@ -33,37 +33,31 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // FIX: Explicitly ignore CSRF checks on all API and WebSocket lines to prevent low-level 403 blocks
-                .csrf(csrf -> csrf
-                        .ignoringRequestMatchers("/api/v1/**", "/ws-portal/**")
-                )
+                .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Explicitly clear browser preflights
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // 2. Wide-open public match paths (Covers all AI tools completely)
-                        .requestMatchers("/api/v1/ai/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("/api/v1/ai/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/jobs").permitAll()
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/uploads/resumes/**").permitAll()
                         .requestMatchers("/ws-portal/**").permitAll()
+                        .requestMatchers("/api/v1/bookmarks/**").permitAll()
 
-                        // 3. Authenticated system endpoints
+
+                                // 🛠️ CRITICAL FIX: Explicitly enforce Ant-style path matching for public file access
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs/**").hasAnyAuthority("ROLE_RECRUITER", "RECRUITER")
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/jobs/**").hasAnyAuthority("ROLE_RECRUITER", "RECRUITER")
+                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/jobs/**").hasAnyAuthority("ROLE_RECRUITER", "RECRUITER")
+                        .requestMatchers("/api/v1/admin/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        .requestMatchers("/api/v1/ai-parser/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_RECRUITER", "RECRUITER")
                         .requestMatchers("/api/v1/notifications/**").authenticated()
                         .requestMatchers("/api/v1/applications/**").authenticated()
                         .requestMatchers("/api/v1/profiles/**").authenticated()
                         .requestMatchers("/api/v1/interviews/**").authenticated()
                         .requestMatchers("/api/v1/analytics/**").authenticated()
-                        .requestMatchers("/api/v1/bookmarks/**").authenticated()
+//                        .requestMatchers("/api/v1/bookmarks/**").authenticated()
                         .requestMatchers("/api/v1/companies/**").authenticated()
-                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
-
-                        // 4. Job adjustments restrictions
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/v1/jobs/**").hasRole("RECRUITER")
-                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/v1/jobs/**").hasRole("RECRUITER")
-                        .requestMatchers(org.springframework.http.HttpMethod.DELETE, "/api/v1/jobs/**").hasRole("RECRUITER")
-
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -72,10 +66,10 @@ public class SecurityConfig {
 
         return http.build();
     }
+
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer() {
         return (web) -> web.ignoring()
-                // Tells Spring Security to completely drop out and skip processing for these paths
                 .requestMatchers("/api/v1/ai/**");
     }
 
