@@ -66,43 +66,43 @@ Engineered with a robust **Spring Boot 3 REST API** architecture and a dynamic, 
 
 ## 🏠 Landing Page
 
-![Landing Page](screenshots/landing-page.png)
+![Landing Page](frontend/screenshots/landing-page.png)
 
 ---
 
 ## 🔐 Login Page
 
-![Login Page](screenshots/login-page.png)
+![Login Page](frontend/screenshots/login-page.png)
 
 ---
 
 ## 📝 Registration Page
 
-![Registration Page](screenshots/register-page.png)
+![Registration Page](frontend/screenshots/register-page.png)
 
 ---
 
 ## 👤 Candidate Dashboard
 
-![Candidate Dashboard](screenshots/candidate-dashboard.png)
+![Candidate Dashboard](frontend/screenshots/candidate-dashboard.png)
 
 ---
 
 ## 💼 Recruiter Dashboard
 
-![Recruiter Dashboard](screenshots/recruiter-dashboard.png)
+![Recruiter Dashboard](frontend/screenshots/recruiter-dashboard.png)
 
 ---
 
 ## 🔒 Admin Dashboard
 
-![Admin Dashboard](screenshots/admin-dashboard.png)
+![Admin Dashboard](frontend/screenshots/admin-dashboard.png)
 
 ---
 
 ## 📑 Resume Analysis (AI)
 
-![Resume Analysis](screenshots/resume-analysis.png)
+![Resume Analysis](frontend/screenshots/resume-analysis.png)
 
 ---
 
